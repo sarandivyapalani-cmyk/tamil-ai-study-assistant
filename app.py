@@ -10,7 +10,7 @@ st.title("📘 Tamil Study Assistant AI")
 st.subheader("Upload Tamil Image or Paste Tamil Text")
 
 # API Key from Streamlit Secrets
-client = OpenAI(api_key=st.secrets["1234"])
+client = OpenAI(api_key=st.secrets["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"])
 
 uploaded_image = st.file_uploader("Upload Tamil Image", type=["jpg", "jpeg", "png"])
 user_text = st.text_area("Or Paste Tamil Text Here")
