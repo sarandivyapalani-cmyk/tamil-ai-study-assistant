@@ -4,7 +4,11 @@ from openai import OpenAI
 from pypdf import PdfReader
 
 # Load API key safely from environment variable
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = OpenAI(api_key=os.getenv("DB_USERNAME = "myuser"
+DB_TOKEN = "abcdef"
+
+[some_section]
+some_key = 1234"))
 
 st.set_page_config(page_title="Tamil AI Literary Assistant")
 
