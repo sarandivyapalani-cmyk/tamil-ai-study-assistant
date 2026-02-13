@@ -1,81 +1,107 @@
 import streamlit as st
-from PIL import Image
-import base64
 import os
 from openai import OpenAI
+from pypdf import PdfReader
 
-st.set_page_config(page_title="Tamil Study Assistant AI")
+# Load API key safely from environment variable
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-st.title("📘 Tamil Study Assistant AI")
-st.subheader("Upload Tamil Image or Paste Tamil Text")
+st.set_page_config(page_title="Tamil AI Literary Assistant")
 
-# API Key from Streamlit Secrets
-client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+st.title("📘 தமிழ் AI கல்வி உதவியாளர்")
+st.write("தமிழ் கவிதையை பதிவேற்றுங்கள் (PDF / TXT) மற்றும் வரி வாரியாக விளக்கம் பெறுங்கள்.")
 
-uploaded_image = st.file_uploader("Upload Tamil Image", type=["jpg", "jpeg", "png"])
-user_text = st.text_area("Or Paste Tamil Text Here")
+# ---------- FILE UPLOAD ----------
+uploaded_file = st.file_uploader("கவிதையை பதிவேற்றவும்", type=["pdf", "txt"])
 
-process_button = st.button("Process")
+def extract_text(file):
+    if file.type == "application/pdf":
+        reader = PdfReader(file)
+        text = ""
+        for page in reader.pages:
+            text += page.extract_text()
+        return text
+    else:
+        return file.read().decode("utf-8")
 
-def encode_image(image):
-    return base64.b64encode(image.read()).decode("utf-8")
+if uploaded_file is not None:
 
-if process_button:
+    poem_text = extract_text(uploaded_file)
 
-    with st.spinner("Processing... Please wait."):
+    # ---------- PREPROCESSING ----------
+    lines = poem_text.split("\n")
+    lines = [line.strip() for line in lines if line.strip() != ""]
 
-        if uploaded_image is not None:
-            # Convert image to base64
-            image_base64 = encode_image(uploaded_image)
+    st.subheader("📜 அசல் கவிதை")
+    st.write(poem_text)
 
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": "Extract the Tamil text from this image and then simplify it with explanation, summary, 2-mark and 5-mark answers."},
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{image_base64}"
-                                },
-                            },
-                        ],
-                    }
-                ],
-                max_tokens=2000,
-            )
+    if st.button("விளக்கம் பெற"):
 
-            result = response.choices[0].message.content
-            st.write(result)
+        analysis_results = []
 
-        elif user_text.strip() != "":
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": f"""
-Convert the following Tamil text into:
+        # ---------- LINE BY LINE PROCESSING ----------
+        for line in lines:
 
-1. Simple modern Tamil
-2. Line-by-line explanation
-3. Important word meanings
-4. Overall summary
-5. 2-mark answer
-6. 5-mark answer
+            prompt = f"""
+நீங்கள் ஒரு தமிழ் இலக்கிய ஆசிரியர்.
 
-Tamil Text:
-{user_text}
+கொடுக்கப்பட்டுள்ள கீழே உள்ள தமிழ் வரியை:
+
+1. எளிய நடுத்தர தமிழில் மாற்றவும்.
+2. அதன் பொருளை தெளிவாக விளக்கவும்.
+3. கடினமான சொற்களின் அர்த்தத்தை தனியாக குறிப்பிடவும்.
+
+வெளியீடு வடிவம்:
+
+எளிய தமிழ்:
+பொருள் விளக்கம்:
+சொற்களின் அர்த்தம்:
+
+தமிழ் வரி:
+{line}
 """
-                    }
-                ],
-                max_tokens=2000,
+
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}]
             )
 
             result = response.choices[0].message.content
-            st.write(result)
 
-        else:
-            st.warning("Please upload an image or paste Tamil text.")
+            analysis_results.append({
+                "original": line,
+                "analysis": result
+            })
+
+        # ---------- FULL POEM ANALYSIS ----------
+        summary_prompt = f"""
+நீங்கள் ஒரு தமிழ் இலக்கிய ஆசிரியர்.
+
+கொடுக்கப்பட்டுள்ள முழு கவிதைக்காக:
+
+1. முழு சுருக்கம் எழுதவும்.
+2. கவிதையின் கரு / முக்கிய கருத்து எழுதவும்.
+3. மூன்று முக்கிய கேள்வி - பதில்கள் உருவாக்கவும்.
+
+கவிதை:
+{poem_text}
+"""
+
+        summary_response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": summary_prompt}]
+        )
+
+        full_analysis = summary_response.choices[0].message.content
+
+        # ---------- DISPLAY RESULTS ----------
+        st.subheader("📖 வரி வாரியான விளக்கம்")
+
+        for item in analysis_results:
+            st.markdown(f"### 🔹 அசல் வரி:\n{item['original']}")
+            st.write(item["analysis"])
+            st.markdown("---")
+
+        st.subheader("📚 முழு கவிதை பகுப்பு")
+        st.write(full_analysis)
+
