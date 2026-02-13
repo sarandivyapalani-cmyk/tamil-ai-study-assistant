@@ -1,111 +1,60 @@
 import streamlit as st
+import requests
 import os
-from openai import OpenAI
-from pypdf import PdfReader
 
-# Load API key safely from environment variable
-client = OpenAI(api_key=os.getenv("DB_USERNAME = "myuser"
-DB_TOKEN = "abcdef"
+# --- CONFIG ---
+API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-large"
+HF_TOKEN = st.secrets["HF_TOKEN"]
 
-[some_section]
-some_key = 1234"))
+headers = {"Authorization": f"Bearer {HF_TOKEN}"}
 
-st.set_page_config(page_title="Tamil AI Literary Assistant")
 
-st.title("📘 தமிழ் AI கல்வி உதவியாளர்")
-st.write("தமிழ் கவிதையை பதிவேற்றுங்கள் (PDF / TXT) மற்றும் வரி வாரியாக விளக்கம் பெறுங்கள்.")
+def explain_tamil_poem(poem_text):
+    prompt = f"""
+நீங்கள் ஒரு தமிழ் இலக்கிய பேராசிரியர்.
 
-# ---------- FILE UPLOAD ----------
-uploaded_file = st.file_uploader("கவிதையை பதிவேற்றவும்", type=["pdf", "txt"])
+கீழே உள்ள தமிழ் கவிதைக்கு:
 
-def extract_text(file):
-    if file.type == "application/pdf":
-        reader = PdfReader(file)
-        text = ""
-        for page in reader.pages:
-            text += page.extract_text()
-        return text
-    else:
-        return file.read().decode("utf-8")
+1. நவீன தமிழில் சாராம்சம்
+2. ஒவ்வொரு வரிக்கும் தனித்தனி விளக்கம்
+3. முக்கிய கருத்து
+4. இலக்கிய அம்சங்கள்
 
-if uploaded_file is not None:
-
-    poem_text = extract_text(uploaded_file)
-
-    # ---------- PREPROCESSING ----------
-    lines = poem_text.split("\n")
-    lines = [line.strip() for line in lines if line.strip() != ""]
-
-    st.subheader("📜 அசல் கவிதை")
-    st.write(poem_text)
-
-    if st.button("விளக்கம் பெற"):
-
-        analysis_results = []
-
-        # ---------- LINE BY LINE PROCESSING ----------
-        for line in lines:
-
-            prompt = f"""
-நீங்கள் ஒரு தமிழ் இலக்கிய ஆசிரியர்.
-
-கொடுக்கப்பட்டுள்ள கீழே உள்ள தமிழ் வரியை:
-
-1. எளிய நடுத்தர தமிழில் மாற்றவும்.
-2. அதன் பொருளை தெளிவாக விளக்கவும்.
-3. கடினமான சொற்களின் அர்த்தத்தை தனியாக குறிப்பிடவும்.
-
-வெளியீடு வடிவம்:
-
-எளிய தமிழ்:
-பொருள் விளக்கம்:
-சொற்களின் அர்த்தம்:
-
-தமிழ் வரி:
-{line}
-"""
-
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": prompt}]
-            )
-
-            result = response.choices[0].message.content
-
-            analysis_results.append({
-                "original": line,
-                "analysis": result
-            })
-
-        # ---------- FULL POEM ANALYSIS ----------
-        summary_prompt = f"""
-நீங்கள் ஒரு தமிழ் இலக்கிய ஆசிரியர்.
-
-கொடுக்கப்பட்டுள்ள முழு கவிதைக்காக:
-
-1. முழு சுருக்கம் எழுதவும்.
-2. கவிதையின் கரு / முக்கிய கருத்து எழுதவும்.
-3. மூன்று முக்கிய கேள்வி - பதில்கள் உருவாக்கவும்.
+அமைப்பாக விளக்கவும்.
 
 கவிதை:
 {poem_text}
 """
 
-        summary_response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": summary_prompt}]
-        )
+    payload = {
+        "inputs": prompt,
+        "parameters": {
+            "max_new_tokens": 500,
+            "temperature": 0.3
+        }
+    }
 
-        full_analysis = summary_response.choices[0].message.content
+    response = requests.post(API_URL, headers=headers, json=payload)
 
-        # ---------- DISPLAY RESULTS ----------
-        st.subheader("📖 வரி வாரியான விளக்கம்")
+    if response.status_code != 200:
+        return f"Error: {response.json()}"
 
-        for item in analysis_results:
-            st.markdown(f"### 🔹 அசல் வரி:\n{item['original']}")
-            st.write(item["analysis"])
-            st.markdown("---")
+    return response.json()[0]["generated_text"]
 
-        st.subheader("📚 முழு கவிதை பகுப்பு")
-        st.write(full_analysis)
+
+# --- STREAMLIT UI ---
+
+st.title("📜 Tamil Poem Explainer")
+st.write("Enter any Tamil poem and get structured explanation.")
+
+poem_input = st.text_area("Enter Tamil Poem Here:")
+
+if st.button("Explain"):
+    if poem_input.strip() == "":
+        st.warning("Please enter a poem.")
+    else:
+        with st.spinner("Analyzing poem..."):
+            result = explain_tamil_poem(poem_input)
+            st.write(result)
+
 
